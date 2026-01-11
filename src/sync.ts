@@ -2,6 +2,7 @@ import { GitHubService, GitTreeNode } from "git";
 import { normalizePath, Notice, TFile, TFolder, Vault } from "obsidian";
 import { DiffResult, DiffService } from "./diff";
 import { SyncPluginSettings } from "./settings";
+import { base64ToUtf8 } from "./utils";
 
 import { RestEndpointMethodTypes } from "@octokit/rest";
 type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"]
@@ -135,8 +136,7 @@ export class SyncService {
         const blobEntries = await Promise.all(
             filesWithSha.map(async ({ path, sha }) => {
                 const base64Content = await this.githubService.getBlob(sha);
-                const utf8Content = Buffer.from(base64Content, "base64").toString("utf-8");
-
+                const utf8Content = base64ToUtf8(base64Content);
                 return [path, utf8Content] as const;
             })
         );

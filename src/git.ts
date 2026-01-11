@@ -5,6 +5,8 @@ import { SyncPluginSettings } from "./settings";
 import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 import { RequestError } from "@octokit/request-error";
 
+import { utf8ToBase64 } from "./utils";
+
 type GetCommitResponse = RestEndpointMethodTypes["git"]["getCommit"]["response"]["data"]
 type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"]
 
@@ -109,7 +111,7 @@ export class GitHubService {
             repo: this.settings.repository,
             path: "README.md",
             message: "Initial commit",
-            content: Buffer.from("Initialized").toString("base64"),
+            content: utf8ToBase64("Initialized"),
             branch: this.settings.branch
         });
     }
