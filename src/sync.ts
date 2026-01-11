@@ -2,8 +2,6 @@ import { GitHubService, GitTreeNode } from "git";
 import { normalizePath, Notice, TFile, TFolder, Vault } from "obsidian";
 import { DiffResult, DiffService } from "./diff";
 import { SyncPluginSettings } from "./settings";
-import fs from "fs";
-import path from "path";
 
 import { RestEndpointMethodTypes } from "@octokit/rest";
 type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"]
@@ -31,7 +29,7 @@ export class SyncService {
         this.baseCommitSha = baseSha;
     }
 
-    async syncChanges(): Promise<Boolean> {
+    async syncTextChanges(): Promise<Boolean> {
         this.baseCommitSha = this.settings.baseSha;
         this.remoteCommitSha = await this.githubService.getHeadCommitSha();
         console.log("BASE:" + this.baseCommitSha);

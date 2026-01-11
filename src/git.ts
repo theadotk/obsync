@@ -1,5 +1,4 @@
 import { Notice } from "obsidian";
-import crypto from "crypto";
 
 import { SyncPluginSettings } from "./settings";
 
@@ -17,12 +16,19 @@ export type GitTreeNode = {
     content?: string;
 };
 
-export function computeGitBlobSha(content: string): string {
-    const contentBuffer = Buffer.from(content, "utf8");
-    const header = Buffer.from(`blob ${contentBuffer.length}\0`, "utf8");
-    const store = Buffer.concat([header, contentBuffer]);
+export async function computeGitBlobSha(content: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const header = encoder.encode(`blob ${data.length}\0`);
 
-    return crypto.createHash("sha1").update(store).digest("hex");
+    const combined = new Uint8Array(header.length + data.length);
+    combined.set(header);
+    combined.set(data, header.length);
+
+    const hashBuffer = await crypto.subtle.digest('SHA-1', combined);
+
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export class GitHubService {

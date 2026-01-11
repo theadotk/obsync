@@ -44,7 +44,7 @@ export default class SyncPlugin extends Plugin {
     async sync() {
         this.syncService.setBaseCommitSha(this.settings.baseSha)
         new Notice('Syncing...');
-        const status = await this.syncService.syncChanges();
+        const status = await this.syncService.syncTextChanges();
         if (status) {
             this.settings.baseSha = this.syncService.getBaseCommitSha();
             await this.saveData(this.settings)

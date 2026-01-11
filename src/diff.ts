@@ -2,6 +2,7 @@ import { computeGitBlobSha } from "git";
 import { Vault } from "obsidian";
 
 import { RestEndpointMethodTypes } from "@octokit/rest";
+import { TEXT_EXTENSIONS } from "./constants";
 type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"];
 
 type Path = string;
@@ -78,12 +79,14 @@ export class DiffService {
     }
 
     async buildLocalStateMap() {
-        const localFiles = this.vault.getFiles();
+        const localFiles = this.vault.getFiles().filter(file =>
+            TEXT_EXTENSIONS.has(file.extension.toLowerCase())
+        );
 
         await Promise.all(
             localFiles.map(async (file) => {
                 const content = await this.vault.read(file);
-                const sha = computeGitBlobSha(content);
+                const sha = await computeGitBlobSha(content);
                 this.setFileState(file.path, "LOCAL", sha, content);
             })
         );
