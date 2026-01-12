@@ -1,5 +1,5 @@
 import { computeGitBlobSha } from "git";
-import { Vault } from "obsidian";
+import { Vault, arrayBufferToBase64 } from "obsidian";
 
 import { RestEndpointMethodTypes } from "@octokit/rest";
 import { TEXT_EXTENSIONS } from "./constants";
@@ -79,15 +79,25 @@ export class DiffService {
     }
 
     async buildLocalStateMap() {
-        const localFiles = this.vault.getFiles().filter(file =>
-            TEXT_EXTENSIONS.has(file.extension.toLowerCase())
-        );
+        const localFiles = this.vault.getFiles();
 
         await Promise.all(
             localFiles.map(async (file) => {
-                const content = await this.vault.read(file);
-                const sha = await computeGitBlobSha(content);
-                this.setFileState(file.path, "LOCAL", sha, content);
+                const lastDot = file.path.lastIndexOf('.');
+                const ext = lastDot !== -1 ? file.path.slice(lastDot + 1).toLowerCase() : "";
+                const isText = TEXT_EXTENSIONS.has(ext);
+
+                if (isText) {
+                    const content = await this.vault.read(file);
+                    const sha = await computeGitBlobSha(content);
+                    this.setFileState(file.path, "LOCAL", sha, content);
+                }
+                else {
+                    const arrayBuffer = await this.vault.readBinary(file);
+                    const sha = await computeGitBlobSha(arrayBuffer);
+                    const base64content = arrayBufferToBase64(arrayBuffer);
+                    this.setFileState(file.path, "LOCAL", sha, base64content);
+                }
             })
         );
     }

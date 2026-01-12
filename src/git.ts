@@ -18,9 +18,17 @@ export type GitTreeNode = {
     content?: string;
 };
 
-export async function computeGitBlobSha(content: string): Promise<string> {
+export async function computeGitBlobSha(content: string | ArrayBuffer): Promise<string> {
+    let data: Uint8Array;
+
+    if (typeof content === 'string') {
+        const encoder = new TextEncoder();
+        data = encoder.encode(content);
+    } else {
+        data = new Uint8Array(content);
+    }
+
     const encoder = new TextEncoder();
-    const data = encoder.encode(content);
     const header = encoder.encode(`blob ${data.length}\0`);
 
     const combined = new Uint8Array(header.length + data.length);
@@ -148,6 +156,17 @@ export class GitHubService {
         });
 
         return data.content;
+    }
+
+    async createBlob(content: string, encoding: "utf-8" | "base64"): Promise<string> {
+        const { data } = await this.octokit.git.createBlob({
+            owner: this.settings.owner,
+            repo: this.settings.repository,
+            content: content,
+            encoding: encoding
+        });
+
+        return data.sha;
     }
 
     async createTree(nodes: GitTreeNode[], baseTreeSha: string | null): Promise<string> {

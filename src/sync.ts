@@ -1,8 +1,9 @@
 import { GitHubService, GitTreeNode } from "git";
-import { normalizePath, Notice, TFile, TFolder, Vault } from "obsidian";
+import { arrayBufferToBase64, base64ToArrayBuffer, normalizePath, Notice, TFile, TFolder, Vault } from "obsidian";
 import { DiffResult, DiffService } from "./diff";
 import { SyncPluginSettings } from "./settings";
 import { base64ToUtf8 } from "./utils";
+import { TEXT_EXTENSIONS } from "./constants";
 
 import { RestEndpointMethodTypes } from "@octokit/rest";
 type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"]
@@ -116,6 +117,13 @@ export class SyncService {
         }
     }
 
+    private isTextFile(normalizedPath: string): Boolean {
+        const lastDot = normalizedPath.lastIndexOf('.');
+        const ext = lastDot !== -1 ? normalizedPath.slice(lastDot + 1).toLowerCase() : "";
+
+        return TEXT_EXTENSIONS.has(ext);
+    }
+
     async fetchRemoteFileContents(): Promise<Record<string, string>> {
         const filePaths: string[] = [
             ...this.diffResult.pullNew,
@@ -136,8 +144,11 @@ export class SyncService {
         const blobEntries = await Promise.all(
             filesWithSha.map(async ({ path, sha }) => {
                 const base64Content = await this.githubService.getBlob(sha);
-                const utf8Content = base64ToUtf8(base64Content);
-                return [path, utf8Content] as const;
+                if (this.isTextFile(normalizePath(path))) {
+                    const utf8Content = base64ToUtf8(base64Content);
+                    return [path, utf8Content] as const;
+                }
+                return [path, base64Content] as const;
             })
         );
 
@@ -180,7 +191,13 @@ export class SyncService {
             const parentPath = parts.slice(0, -1).join("/");
 
             if (parentPath) await this.ensureFolderExists(parentPath);
-            await this.vault.create(normalizedPath, content);
+
+            if (this.isTextFile(normalizePath(filePath)))
+                await this.vault.create(normalizedPath, content);
+            else {
+                const binaryData = base64ToArrayBuffer(content);
+                await this.vault.createBinary(filePath, binaryData);
+            }
         }
     }
 
@@ -193,7 +210,12 @@ export class SyncService {
             const file = this.vault.getFileByPath(normalizedPath);
             if (!file) continue;
 
-            await this.vault.modify(file, content);
+            if (this.isTextFile((normalizePath(filePath))))
+                await this.vault.modify(file, content);
+            else {
+                const binaryData = base64ToArrayBuffer(content);
+                await this.vault.modifyBinary(file, binaryData);
+            }
         }
     }
 
@@ -267,17 +289,26 @@ export class SyncService {
                 try {
                     const state = this.diffService.getFileState(file.path)
                     let content;
-                    if (state.content)
-                        content = state.content
-                    else
-                        content = await this.vault.read(file);
+                    if (this.isTextFile(normalizePath(file.path))) {
+                        content = state.content ?? await this.vault.read(file);
+                        return {
+                            path: file.path,
+                            type: "blob",
+                            mode: "100644",
+                            content: content
+                        } as GitTreeNode;
+                    }
+                    const arrayBuffer = await this.vault.readBinary(file);
+                    content = arrayBufferToBase64(arrayBuffer);
+                    const blobSha = await this.githubService.createBlob(content, "base64");
                     return {
                         path: file.path,
                         type: "blob",
                         mode: "100644",
-                        content: content
+                        sha: blobSha
                     } as GitTreeNode;
-                } catch (e) {
+                }
+                catch (e) {
                     console.error(`Failed to read file ${filePath}`, e);
                     return null;
                 }
