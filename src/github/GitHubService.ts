@@ -1,45 +1,12 @@
 import { Notice } from "obsidian";
-
-import { SyncPluginSettings } from "./settings";
-
 import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
 import { RequestError } from "@octokit/request-error";
-
-import { utf8ToBase64 } from "./utils";
+import { SyncPluginSettings } from "settings";
+import { utf8ToBase64 } from "utils/encoding";
+import { GitTreeNode } from "./GitTypes";
 
 type GetCommitResponse = RestEndpointMethodTypes["git"]["getCommit"]["response"]["data"]
 type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"]
-
-export type GitTreeNode = {
-    path: string;
-    mode?: "100644";
-    type?: "blob" | "tree";
-    sha?: string | null;
-    content?: string;
-};
-
-export async function computeGitBlobSha(content: string | ArrayBuffer): Promise<string> {
-    let data: Uint8Array;
-
-    if (typeof content === 'string') {
-        const encoder = new TextEncoder();
-        data = encoder.encode(content);
-    } else {
-        data = new Uint8Array(content);
-    }
-
-    const encoder = new TextEncoder();
-    const header = encoder.encode(`blob ${data.length}\0`);
-
-    const combined = new Uint8Array(header.length + data.length);
-    combined.set(header);
-    combined.set(data, header.length);
-
-    const hashBuffer = await crypto.subtle.digest('SHA-1', combined);
-
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 export class GitHubService {
     private octokit: Octokit;
@@ -49,6 +16,15 @@ export class GitHubService {
         this.octokit = new Octokit({
             auth: settings.accessToken,
         });
+        this.settings = settings;
+    }
+
+    updateSettings(settings: SyncPluginSettings) {
+        if (settings.accessToken !== this.settings.accessToken) {
+            this.octokit = new Octokit({
+                auth: settings.accessToken,
+            });
+        }
         this.settings = settings;
     }
 
@@ -67,28 +43,6 @@ export class GitHubService {
             }
             else if (err instanceof RequestError && err.status === 404) {
                 new Notice("Repository: <" + this.settings.repository + "> does not exist");
-                return false;
-            }
-            throw err;
-        }
-    }
-
-    async branchExists(): Promise<boolean> {
-        try {
-            await this.octokit.repos.getBranch({
-                owner: this.settings.owner,
-                repo: this.settings.repository,
-                branch: this.settings.branch
-            });
-            return true;
-        }
-        catch (err) {
-            if (err instanceof RequestError && err.status === 401) {
-                new Notice("Requires Authentication. Please check the access token");
-                return false;
-            }
-            else if (err instanceof RequestError && err.status === 404) {
-                new Notice("Branch: <" + this.settings.branch + "> does not exist");
                 return false;
             }
             throw err;
@@ -123,7 +77,6 @@ export class GitHubService {
             branch: this.settings.branch
         });
     }
-
 
     async getCommit(sha: string): Promise<GetCommitResponse> {
         const { data } = await this.octokit.git.getCommit({

@@ -1,17 +1,14 @@
 import { Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, SyncPluginSettings, SyncSettingTab } from "./settings";
-import { GitHubService } from './git';
-import { SyncService } from './sync';
+import { SyncResult, SyncService } from 'sync';
 
 export default class SyncPlugin extends Plugin {
     settings: SyncPluginSettings;
-    githubService: GitHubService;
     syncService: SyncService;
 
     async onload() {
         await this.loadSettings();
-        this.githubService = new GitHubService(this.settings);
-        this.syncService = new SyncService(this.app.vault, this.githubService, this.settings);
+        this.syncService = new SyncService(this.app.vault, this.settings);
 
         this.addRibbonIcon('github', 'Sync with GitHub',
             async (evt: MouseEvent) => {
@@ -39,14 +36,16 @@ export default class SyncPlugin extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
+        this.syncService.updateSettings(this.settings);
     }
 
     async sync() {
-        this.syncService.setBaseCommitSha(this.settings.baseSha)
         new Notice('Syncing...');
-        const status = await this.syncService.syncTextChanges();
-        if (status) {
-            this.settings.baseSha = this.syncService.getBaseCommitSha();
+        const syncResult: SyncResult = await this.syncService.syncChanges(this.settings.baseSha, this.settings.branch);
+        for (const message of syncResult.messages)
+            new Notice(message);
+        if (syncResult.status) {
+            this.settings.baseSha = syncResult.baseSha;
             await this.saveData(this.settings)
         }
     }
