@@ -18,6 +18,14 @@ export class DiffService {
             const remoteSha = fileState.remoteSha ?? null;
 
             if (baseSha === null) {
+                if (localSha !== null && remoteSha !== null && localSha === remoteSha) // Already synced
+                    continue;
+
+                if (localSha !== null && remoteSha !== null && localSha !== remoteSha) {
+                    result.conflicts.push(filePath);
+                    continue;
+                }
+
                 if (localSha === null && remoteSha !== null) {
                     result.pullNew.push(filePath);
                     continue;
@@ -27,15 +35,15 @@ export class DiffService {
                     result.pushNew.push(filePath);
                     continue;
                 }
-
-                if (localSha !== null && remoteSha !== null && localSha !== remoteSha) {
-                    result.conflicts.push(filePath);
-                    continue;
-                }
             }
 
             if (localSha === baseSha && remoteSha === baseSha) // Already Synced
                 continue;
+
+            if (remoteSha !== localSha && localSha !== baseSha && remoteSha !== baseSha) {
+                result.conflicts.push(filePath);
+                continue;
+            }
 
             if (localSha === baseSha && remoteSha !== localSha && remoteSha !== null) {
                 result.pullUpdate.push(filePath);
@@ -54,11 +62,6 @@ export class DiffService {
 
             if (remoteSha === baseSha && localSha === null) {
                 result.pushDelete.push(filePath);
-                continue;
-            }
-
-            if (remoteSha !== localSha && localSha !== baseSha && remoteSha !== baseSha) {
-                result.conflicts.push(filePath);
                 continue;
             }
         }

@@ -1,4 +1,4 @@
-import { Vault, normalizePath, TFolder, base64ToArrayBuffer } from "obsidian";
+import { Vault, normalizePath, TFolder, base64ToArrayBuffer, Notice } from "obsidian";
 import { GitHubService } from "github";
 import { DiffResult, FileStates, Path } from "diff";
 import { base64ToUtf8 } from "utils/encoding";
@@ -15,6 +15,7 @@ export class PullService {
 
     async pullChanges(diffResult: DiffResult, fileStates: FileStates): Promise<boolean> {
         try {
+            new Notice("Pulling Changes...")
             const remoteFiles = await this.fetchRemoteFiles(diffResult, fileStates);
 
             await this.pullNewObjects(diffResult.pullNew, remoteFiles);

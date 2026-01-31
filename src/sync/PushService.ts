@@ -1,4 +1,4 @@
-import { Vault, TFile, arrayBufferToBase64 } from "obsidian";
+import { Notice, Vault, TFile, arrayBufferToBase64 } from "obsidian";
 import { GitTreeNode, GitHubService } from "github";
 import { DiffResult, FileStates } from "diff";
 import { isTextFile } from "./utils";
@@ -14,6 +14,7 @@ export class PushService {
 
     async pushChanges(diffResult: DiffResult, fileStates: FileStates, remoteCommitSha: string | null, branchName: string): Promise<string | null> {
         try {
+            new Notice("Pushing Changes...")
             const localTreeNodes = await this.createTreeNodes(diffResult, fileStates);
 
             for (const deletedPath of diffResult.pushDelete) {

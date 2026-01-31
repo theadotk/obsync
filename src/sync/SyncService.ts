@@ -58,6 +58,8 @@ export class SyncService {
 
         if (totalConflicts + totalPullChanges + totalPushChanges === 0) {
             syncResult.status = true;
+            if (!baseCommitSha)
+                syncResult.baseSha = remoteCommitSha
             syncResult.messages.push("No changes since last sync");
             return syncResult;
         }
@@ -83,7 +85,7 @@ export class SyncService {
             return syncResult;
         }
 
-        let latestCommitSha: string | null = null;
+        let latestCommitSha: string | null = remoteCommitSha;
         let pushStatus = true;
 
         if (totalPushChanges > 0) {
@@ -104,7 +106,7 @@ export class SyncService {
 
         syncResult.status = true;
         syncResult.messages.push("Sync: Successful");
-        syncResult.baseSha = latestCommitSha ?? "";
+        syncResult.baseSha = latestCommitSha;
 
         return syncResult;
     }
