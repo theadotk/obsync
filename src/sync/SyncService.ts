@@ -1,6 +1,6 @@
 import { Vault } from "obsidian";
 import { SyncPluginSettings } from "settings";
-import { GitHubService } from "github";
+import { UpstreamProvider, GitHubProvider, GiteaProvider } from "upstream";
 import { DiffResult, DiffService, FileStates } from "diff";
 import { StateBuilder } from "./StateBuilder";
 import { SyncResult } from "./SyncTypes";
@@ -10,15 +10,38 @@ import { PushService } from "./PushService";
 
 export class SyncService {
     private vault: Vault;
-    private githubService: GitHubService;
+    private upstreamProvider: UpstreamProvider;
+    private activeProviderId: string;
 
     constructor(vault: Vault, settings: SyncPluginSettings) {
         this.vault = vault;
-        this.githubService = new GitHubService(settings);
+        this.activeProviderId = settings.upstreamProvider;
+        this.upstreamProvider = this.createProvider(settings);
+    }
+
+    private createProvider(settings: SyncPluginSettings): UpstreamProvider {
+        switch (settings.upstreamProvider) {
+            case "gitea":
+                return new GiteaProvider(settings);
+            case "github":
+            default:
+                return new GitHubProvider(settings);
+        }
+    }
+
+    updateSettings(settings: SyncPluginSettings) {
+        if (this.activeProviderId !== settings.upstreamProvider) {
+            console.debug(`Switched provider from ${this.activeProviderId} to ${settings.upstreamProvider}`);
+
+            this.upstreamProvider = this.createProvider(settings);
+            this.activeProviderId = settings.upstreamProvider;
+        } else {
+            this.upstreamProvider.updateSettings(settings);
+        }
     }
 
     async syncChanges(baseCommitSha: string | null, branchName: string): Promise<SyncResult> {
-        let remoteCommitSha = await this.githubService.getHeadCommitSha();
+        let remoteCommitSha = await this.upstreamProvider.getHeadCommitSha();
 
         let diffResult: DiffResult = {
             pullNew: [],
@@ -38,12 +61,13 @@ export class SyncService {
 
         let initialCommit = false;
         if (!remoteCommitSha) {
-            await this.githubService.createInitCommit();
-            remoteCommitSha = await this.githubService.getHeadCommitSha();
+            await this.upstreamProvider.createInitCommit();
+            remoteCommitSha = await this.upstreamProvider.getHeadCommitSha();
             initialCommit = true;
+            baseCommitSha = null;
         }
 
-        const stateBuilder = new StateBuilder(this.vault, this.githubService);
+        const stateBuilder = new StateBuilder(this.vault, this.upstreamProvider);
         const fileStates: FileStates = await stateBuilder.build(baseCommitSha, remoteCommitSha);
 
         const diffService = new DiffService();
@@ -75,7 +99,7 @@ export class SyncService {
 
         let pullStatus = true;
         if (totalPullChanges > 0) {
-            const pullService = new PullService(this.vault, this.githubService);
+            const pullService = new PullService(this.vault, this.upstreamProvider);
             pullStatus = await pullService.pullChanges(diffResult, fileStates);
         }
 
@@ -89,7 +113,7 @@ export class SyncService {
         let pushStatus = true;
 
         if (totalPushChanges > 0) {
-            const pushService = new PushService(this.vault, this.githubService);
+            const pushService = new PushService(this.vault, this.upstreamProvider);
             const newCommitSha = await pushService.pushChanges(diffResult, fileStates, remoteCommitSha, branchName);
 
             if (newCommitSha)
@@ -109,9 +133,5 @@ export class SyncService {
         syncResult.baseSha = latestCommitSha;
 
         return syncResult;
-    }
-
-    updateSettings(settings: SyncPluginSettings) {
-        this.githubService.updateSettings(settings);
     }
 }

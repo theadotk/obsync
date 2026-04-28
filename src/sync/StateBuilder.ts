@@ -1,26 +1,23 @@
 import { arrayBufferToBase64, TFile, Vault } from "obsidian";
-import { computeGitBlobSha, GitHubService } from "github";
 import { Path, FileSource, FileState, FileStates } from "diff";
 import { TEXT_EXTENSIONS } from "utils/constants";
-
-import { RestEndpointMethodTypes } from "@octokit/rest";
-type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"];
+import { UpstreamTree, UpstreamProvider, computeGitBlobSha } from "upstream";
 
 export class StateBuilder {
     private vault: Vault;
-    private githubService: GitHubService;
+    private upstreamProvider: UpstreamProvider;
 
-    constructor(vault: Vault, githubService: GitHubService) {
+    constructor(vault: Vault, upstreamProvider: UpstreamProvider) {
         this.vault = vault;
-        this.githubService = githubService;
+        this.upstreamProvider = upstreamProvider;
     }
 
     async build(baseCommitSha: string | null, remoteCommitSha: string | null): Promise<FileStates> {
         const fileStates: FileStates = new Map();
 
         const [baseCommitTree, remoteCommitTree] = await Promise.all([
-            baseCommitSha ? this.githubService.getTree(baseCommitSha) : null,
-            remoteCommitSha ? this.githubService.getTree(remoteCommitSha) : null
+            baseCommitSha ? this.upstreamProvider.getTree(baseCommitSha) : null,
+            remoteCommitSha ? this.upstreamProvider.getTree(remoteCommitSha) : null
         ]);
 
         await this.buildLocalStateMap(fileStates);
@@ -79,7 +76,7 @@ export class StateBuilder {
         this.setFileState(fileStates, file.path, "LOCAL", sha, content);
     }
 
-    private buildTreeStateMap(fileStates: FileStates, treeResponse: GetTreeResponse | null, source: "BASE" | "REMOTE") {
+    private buildTreeStateMap(fileStates: FileStates, treeResponse: UpstreamTree | null, source: "BASE" | "REMOTE") {
         if (!treeResponse) return;
         for (const node of treeResponse.tree)
             if (node.type === "blob" && node.path && node.sha)

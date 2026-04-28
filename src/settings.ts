@@ -3,6 +3,8 @@ import SyncPlugin from "./main";
 
 export interface SyncPluginSettings {
     owner: string;
+    upstreamProvider: string;
+    url: string;
     repository: string;
     branch: string;
     accessToken: string;
@@ -11,6 +13,8 @@ export interface SyncPluginSettings {
 
 export const DEFAULT_SETTINGS: SyncPluginSettings = {
     owner: 'username',
+    upstreamProvider: 'github',
+    url: '',
     repository: 'repo',
     branch: 'main',
     accessToken: 'github_pat_XXXXX',
@@ -33,8 +37,44 @@ export class SyncSettingTab extends PluginSettingTab {
         let tokenInput: HTMLInputElement;
 
         new Setting(containerEl)
+            .setName('Upstream')
+            .setDesc('Select the remote repository provider')
+            .addDropdown(dropdown => {
+                dropdown.addOption("github", "GitHub");
+                dropdown.addOption("gitea", "Gitea");
+
+                dropdown.setValue(this.plugin.settings.upstreamProvider);
+
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.upstreamProvider = value;
+                    console.debug("Upstream Updated: Resetting baseSha");
+                    this.plugin.settings.baseSha = null;
+                    await this.plugin.saveSettings();
+
+                    this.display();
+                });
+            });
+
+        const isGitea = this.plugin.settings.upstreamProvider === "gitea"
+        if (isGitea) {
+            new Setting(containerEl)
+                .setName('Gitea URL')
+                .addText(text => {
+                    text.setValue(this.plugin.settings.url);
+                    text.onChange(async (value) => {
+                        if (value !== this.plugin.settings.url) {
+                            console.debug("URL Updated: Resetting baseSha");
+                            this.plugin.settings.baseSha = null;
+                        }
+                        this.plugin.settings.url = value.trim();
+                        await this.plugin.saveSettings();
+                    });
+                });
+        }
+
+        new Setting(containerEl)
             .setName('Owner')
-            .setDesc('Repository owner of GitHub')
+            .setDesc('Repository owner')
             .addText(text => {
                 text.setValue(this.plugin.settings.owner);
                 text.onChange(async (value) => {
@@ -49,7 +89,7 @@ export class SyncSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Repository')
-            .setDesc('The GitHub repository name')
+            .setDesc('The repository name')
             .addText(text => {
                 text.setValue(this.plugin.settings.repository);
                 text.onChange(async (value) => {
@@ -77,8 +117,8 @@ export class SyncSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('GitHub Access Token')
-            .setDesc('Used for connecting with your GitHub')
+            .setName('Access Token')
+            .setDesc('Used for authentication')
             .addText(text => {
                 text.inputEl.type = 'password';
                 text.setPlaceholder('Enter your token here');

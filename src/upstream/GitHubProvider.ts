@@ -1,14 +1,12 @@
 import { Notice } from "obsidian";
-import { Octokit, RestEndpointMethodTypes } from "@octokit/rest";
+import { Octokit } from "@octokit/rest";
 import { RequestError } from "@octokit/request-error";
 import { SyncPluginSettings } from "settings";
 import { utf8ToBase64 } from "utils/encoding";
-import { GitTreeNode } from "./GitTypes";
+import { UpstreamProvider } from "upstream";
+import { UpstreamTreeNode, UpstreamTree, UpstreamCommit } from "upstream";
 
-type GetCommitResponse = RestEndpointMethodTypes["git"]["getCommit"]["response"]["data"]
-type GetTreeResponse = RestEndpointMethodTypes["git"]["getTree"]["response"]["data"]
-
-export class GitHubService {
+export class GitHubProvider implements UpstreamProvider {
     private octokit: Octokit;
     private settings: SyncPluginSettings;
 
@@ -78,7 +76,7 @@ export class GitHubService {
         });
     }
 
-    async getCommit(sha: string): Promise<GetCommitResponse> {
+    async getCommit(sha: string): Promise<UpstreamCommit> {
         const { data } = await this.octokit.git.getCommit({
             owner: this.settings.owner,
             repo: this.settings.repository,
@@ -88,7 +86,7 @@ export class GitHubService {
         return data;
     }
 
-    async getTree(commitSha: string): Promise<GetTreeResponse> {
+    async getTree(commitSha: string): Promise<UpstreamTree> {
         const commit = await this.getCommit(commitSha);
 
         const { data } = await this.octokit.git.getTree({
@@ -98,7 +96,16 @@ export class GitHubService {
             recursive: "true",
         });
 
-        return data;
+        return {
+            sha: data.sha,
+
+            tree: data.tree.map(node => ({
+                path: node.path as string,
+                mode: node.mode as string,
+                type: node.type as "blob" | "tree" | "commit",
+                sha: node.sha || null,
+            }))
+        };
     }
 
     async getBlob(fileSha: string): Promise<string> {
@@ -122,7 +129,7 @@ export class GitHubService {
         return data.sha;
     }
 
-    async createTree(nodes: GitTreeNode[], baseTreeSha: string | null): Promise<string> {
+    async createTree(nodes: UpstreamTreeNode[], baseTreeSha: string | null): Promise<string> {
         const treePayload: any = {
             owner: this.settings.owner,
             repo: this.settings.repository,
@@ -171,7 +178,7 @@ export class GitHubService {
             force: false
         });
 
-        new Notice("Please wait. Updating GitHub....")
+        new Notice("Please wait...")
 
         const startTime = Date.now();
         let delay = 500;

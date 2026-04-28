@@ -1,16 +1,16 @@
 import { Vault, normalizePath, TFolder, base64ToArrayBuffer, Notice } from "obsidian";
-import { GitHubService } from "github";
+import { UpstreamProvider } from "upstream";
 import { DiffResult, FileStates, Path } from "diff";
 import { base64ToUtf8 } from "utils/encoding";
-import { isTextFile } from "./utils";
+import { isTextFile } from "utils/io";
 
 export class PullService {
     private vault: Vault;
-    private githubService: GitHubService;
+    private upstreamProvider: UpstreamProvider;
 
-    constructor(vault: Vault, githubService: GitHubService) {
+    constructor(vault: Vault, upstreamProvider: UpstreamProvider) {
         this.vault = vault;
-        this.githubService = githubService;
+        this.upstreamProvider = upstreamProvider;
     }
 
     async pullChanges(diffResult: DiffResult, fileStates: FileStates): Promise<boolean> {
@@ -30,7 +30,7 @@ export class PullService {
     }
 
     private async getRemoteFileBlob(path: Path, sha: string) {
-        const base64Content = await this.githubService.getBlob(sha);
+        const base64Content = await this.upstreamProvider.getBlob(sha);
 
         if (isTextFile(path)) {
             const utf8Content = base64ToUtf8(base64Content);

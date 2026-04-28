@@ -1,4 +1,4 @@
-import { TEXT_EXTENSIONS } from "utils/constants";
+import { TEXT_EXTENSIONS } from "./constants";
 
 export function isTextFile(normalizedPath: string): boolean {
     const lastDot = normalizedPath.lastIndexOf('.');
@@ -6,4 +6,3 @@ export function isTextFile(normalizedPath: string): boolean {
 
     return TEXT_EXTENSIONS.has(ext);
 }
-

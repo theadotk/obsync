@@ -10,7 +10,7 @@ export default class SyncPlugin extends Plugin {
         await this.loadSettings();
         this.syncService = new SyncService(this.app.vault, this.settings);
 
-        this.addRibbonIcon('github', 'Sync with GitHub',
+        this.addRibbonIcon('sync', 'Sync Vault with Upstream',
             async (evt: MouseEvent) => {
                 await this.sync();
             }
@@ -18,7 +18,7 @@ export default class SyncPlugin extends Plugin {
 
         this.addCommand({
             id: 'sync',
-            name: 'Sync with GitHub',
+            name: 'Sync Vault',
             callback: async () => {
                 await this.sync();
             }
