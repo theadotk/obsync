@@ -59,6 +59,7 @@ export class SyncSettingTab extends PluginSettingTab {
         if (isGitea) {
             new Setting(containerEl)
                 .setName('Gitea URL')
+                .setDesc('Use HTTPS for cross-device compatibility')
                 .addText(text => {
                     text.setValue(this.plugin.settings.url);
                     text.onChange(async (value) => {
@@ -74,7 +75,6 @@ export class SyncSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Owner')
-            .setDesc('Repository owner')
             .addText(text => {
                 text.setValue(this.plugin.settings.owner);
                 text.onChange(async (value) => {
@@ -89,7 +89,6 @@ export class SyncSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Repository')
-            .setDesc('The repository name')
             .addText(text => {
                 text.setValue(this.plugin.settings.repository);
                 text.onChange(async (value) => {
@@ -118,7 +117,6 @@ export class SyncSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Access Token')
-            .setDesc('Used for authentication')
             .addText(text => {
                 text.inputEl.type = 'password';
                 text.setPlaceholder('Enter your token here');

@@ -10,7 +10,7 @@ export default class SyncPlugin extends Plugin {
         await this.loadSettings();
         this.syncService = new SyncService(this.app.vault, this.settings);
 
-        this.addRibbonIcon('sync', 'Sync Vault with Upstream',
+        this.addRibbonIcon('sync', 'Sync Vault',
             async (evt: MouseEvent) => {
                 await this.sync();
             }

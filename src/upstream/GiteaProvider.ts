@@ -97,9 +97,7 @@ export class GiteaProvider implements UpstreamProvider {
     }
 
     async getCommit(sha: string): Promise<UpstreamCommit> {
-        // A fake staging SHA means a previous push completed but the caller
-        // stored the local cache key instead of the real Gitea SHA.
-        // Resolve it to the actual HEAD before hitting the API.
+        // Prevent the usage of stale staging SHA
         if (sha.startsWith("commit_")) {
             const realSha = await this.getHeadCommitSha();
             if (!realSha) throw new Error("Gitea: could not resolve HEAD to replace stale staging SHA.");
@@ -116,14 +114,85 @@ export class GiteaProvider implements UpstreamProvider {
         };
     }
 
-    private async fetchAllTreeNodes(treeSha: string): Promise<any[]> {
-        const nodes: any[] = [];
-        let page = 1, truncated = true;
-        while (truncated) {
-            const res = await this.request(`${this.repo}/git/trees/${treeSha}?recursive=true&per_page=1000&page=${page++}`);
-            nodes.push(...res.tree);
-            truncated = res.truncated ?? false;
+    private async fetchPageWise<T>(
+        tasks: Array<() => Promise<T>>,
+        limit: number
+    ): Promise<T[]> {
+        const results: T[] = new Array(tasks.length);
+        let nextIndex = 0;
+        const controller = new AbortController();
+
+        async function worker() {
+            while (!controller.signal.aborted) {
+                const current = nextIndex++;
+                if (current >= tasks.length) break;
+
+                const task = tasks[current];
+                if (!task) break;
+
+                try {
+                    results[current] = await task();
+                } catch (err) {
+                    controller.abort();
+                    throw err;
+                }
+            }
         }
+
+        const workers = Array.from({ length: limit }, worker);
+        await Promise.all(workers);
+
+        return results;
+    }
+
+    private async fetchAllTreeNodes(treeSha: string): Promise<UpstreamTreeNode[]> {
+        const pageLimit = 500;
+        const nodes: UpstreamTreeNode[] = [];
+
+        const firstResponse = await this.request(
+            `${this.repo}/git/trees/${treeSha}?recursive=true&per_page=${pageLimit}&page=1`
+        );
+
+        nodes.push(...firstResponse.tree);
+
+        const totalCount = firstResponse.total_count ?? firstResponse.tree.length;
+        const pageCount = Math.ceil(totalCount / pageLimit);
+
+        if (pageCount > 1) {
+            const tasks: Array<() => Promise<any>> = [];
+
+            for (let page = 2; page <= pageCount; page++) {
+                tasks.push(() =>
+                    this.request(
+                        `${this.repo}/git/trees/${treeSha}?recursive=true&per_page=${pageLimit}&page=${page}`
+                    )
+                );
+            }
+
+            const responses = await this.fetchPageWise(tasks, 5);
+
+            for (const res of responses) {
+                if (res?.tree) nodes.push(...res.tree);
+            }
+        }
+
+        // Fallback: only runs when total_count was missing and firstResponse is truncated
+        if (!firstResponse.total_count && firstResponse.truncated) {
+            let page = pageCount + 1;
+            let truncated = true;
+
+            while (truncated) {
+                const res = await this.request(
+                    `${this.repo}/git/trees/${treeSha}?recursive=true&per_page=${pageLimit}&page=${page++}`
+                );
+
+                if (!res?.tree?.length) break;
+
+                nodes.push(...res.tree);
+                truncated = res.truncated ?? false;
+            }
+        }
+
         return nodes;
     }
 
@@ -144,6 +213,12 @@ export class GiteaProvider implements UpstreamProvider {
     async getBlob(fileSha: string): Promise<string> {
         return this.request(`${this.repo}/git/blobs/${fileSha}`).then(r => r.content).catch(() => "");
     }
+
+    /* 
+       There are no POST methods for creating blobs, trees, or commits in Gitea API.
+       This implementation works around that limitation by creating a staging SHA 
+       and using the operations + contents API to apply the changes to a repo.
+     */
 
     private pendingBlobs = new Map<string, string>();
     private pendingTrees = new Map<string, UpstreamTreeNode[]>();
