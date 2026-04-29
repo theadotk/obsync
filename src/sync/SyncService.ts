@@ -1,4 +1,4 @@
-import { Vault } from "obsidian";
+import { normalizePath, Vault } from "obsidian";
 import { SyncPluginSettings } from "settings";
 import { UpstreamProvider, GitHubProvider, GiteaProvider } from "upstream";
 import { DiffResult, DiffService, FileStates } from "diff";
@@ -72,8 +72,7 @@ export class SyncService {
 
         const diffService = new DiffService();
         diffResult = await diffService.getDiff(fileStates);
-        if (initialCommit)
-            diffResult.pushDelete.push("README.md");
+
         console.log("Diff Result:", diffResult);
 
         const totalConflicts = diffResult.conflicts.length
@@ -109,10 +108,17 @@ export class SyncService {
             return syncResult;
         }
 
+        if (initialCommit) {
+            const readmeFile = this.vault.getFileByPath(normalizePath("README.md"))
+            if (readmeFile)
+                this.vault.delete(readmeFile)
+            diffResult.pushDelete.push("README.md");
+        }
+
         let latestCommitSha: string | null = remoteCommitSha;
         let pushStatus = true;
 
-        if (totalPushChanges > 0) {
+        if (totalPushChanges > 0 || initialCommit) {
             const pushService = new PushService(this.vault, this.upstreamProvider);
             const newCommitSha = await pushService.pushChanges(diffResult, fileStates, remoteCommitSha, branchName);
 
